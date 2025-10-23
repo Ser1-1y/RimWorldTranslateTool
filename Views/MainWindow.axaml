@@ -1,0 +1,154 @@
+<Window
+    Height="800"
+    Title="RimWorld Mod Translator"
+    Width="1200"
+    x:Class="RimWorldModTranslate.Views.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:local="clr-namespace:RimWorldModTranslate.Views"
+    xmlns:models="clr-namespace:RimWorldModTranslate.Models"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <DockPanel>
+        <Grid
+            ColumnDefinitions="Auto,*,Auto"
+            DockPanel.Dock="Top"
+            Margin="8">
+            <StackPanel
+                Grid.Column="0"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button Click="OnLoadFolderClick" Content="Load Mod Folder" />
+                <Button
+                    Click="OnSaveClick"
+                    Content="Save Current File"
+                    x:Name="SaveButton" />
+                <Button
+                    Click="OnSaveAllClick"
+                    Content="Save All Files"
+                    x:Name="SaveAllButton" />
+            </StackPanel>
+
+            <TextBlock
+                BaselineOffset="20"
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                x:Name="LoadedFolderTextBlock" />
+
+            <Button
+                Click="OnOpenSettingsClick"
+                Content="Settings"
+                Grid.Column="2"
+                HorizontalAlignment="Right" />
+        </Grid>
+
+
+        <TextBlock
+            DockPanel.Dock="Bottom"
+            Margin="8"
+            x:Name="StatusText" />
+
+        <Grid
+            DockPanel.Dock="Top"
+            Margin="8"
+            RowDefinitions="*,8"
+            x:Name="MainGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition
+                    MaxWidth="1000"
+                    MinWidth="100"
+                    Width="150" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border
+                BorderBrush="#333"
+                BorderThickness="1"
+                CornerRadius="4"
+                Grid.Column="0"
+                Grid.Row="0"
+                Padding="4"
+                x:Name="FileListBorder">
+                <ListBox SelectionChanged="OnFileSelected" x:Name="FileList" />
+            </Border>
+
+            <GridSplitter
+                Background="#555"
+                Grid.Column="1"
+                Grid.Row="0"
+                HorizontalAlignment="Center"
+                ResizeDirection="Columns"
+                Width="2"
+                x:Name="ColumnSplitter" />
+
+            <Border
+                BorderBrush="#333"
+                BorderThickness="1"
+                CornerRadius="4"
+                Grid.Column="2"
+                Grid.Row="0"
+                Padding="4">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto">
+                    <TreeView x:Name="TranslationTree">
+                        <TreeView.DataTemplates>
+                            <TreeDataTemplate DataType="models:TranslationNode" ItemsSource="{Binding Children}">
+                                <StackPanel
+                                    Margin="4,2"
+                                    Orientation="Horizontal"
+                                    Spacing="4"
+                                    VerticalAlignment="Center">
+
+                                    <SelectableTextBlock
+                                        DoubleTapped="OnNodeDoubleTapped"
+                                        Text="{Binding DisplayText}"
+                                        TextTrimming="CharacterEllipsis"
+                                        TextWrapping="NoWrap"
+                                        VerticalAlignment="Center" />
+
+                                    <TextBox
+                                        BorderBrush="{Binding HasGrammarIssues, Converter={StaticResource BoolToBrushConverter}}"
+                                        CornerRadius="28"
+                                        IsVisible="{Binding IsEditing}"
+                                        KeyDown="OnEditKeyDown"
+                                        Loaded="OnEditTextBoxLoaded"
+                                        LostFocus="OnEditLostFocus"
+                                        MaxWidth="800"
+                                        MinWidth="250"
+                                        Text="{Binding Translation, Mode=TwoWay}"
+                                        TextWrapping="NoWrap"
+                                        ToolTip.Tip="{Binding GrammarSummary}"
+                                        VerticalAlignment="Center"
+                                        Watermark="Enter translation..." />
+
+                                    <StackPanel
+                                        IsVisible="{Binding HasGrammarIssues}"
+                                        Orientation="Horizontal"
+                                        ToolTip.Tip="{Binding GrammarSummary}"
+                                        VerticalAlignment="Center">
+                                        <TextBlock
+                                            Foreground="OrangeRed"
+                                            IsVisible="{Binding HasGrammarIssues}"
+                                            MaxWidth="400"
+                                            Text="⚠️"
+                                            TextWrapping="Wrap"
+                                            ToolTip.Placement="Right"
+                                            ToolTip.Tip="{Binding GrammarSummary}"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            Foreground="OrangeRed"
+                                            Margin="4,0,0,0"
+                                            MaxWidth="400"
+                                            Text="{Binding GrammarSummary}"
+                                            TextWrapping="Wrap"
+                                            VerticalAlignment="Center" />
+                                    </StackPanel>
+
+                                </StackPanel>
+                            </TreeDataTemplate>
+                        </TreeView.DataTemplates>
+                    </TreeView>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>
