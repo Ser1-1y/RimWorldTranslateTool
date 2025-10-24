@@ -42,6 +42,27 @@
             <CheckBox IsChecked="{Binding AutoSave}" VerticalAlignment="Center" />
         </StackPanel>
 
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="8"
+            VerticalAlignment="Center">
+            <TextBlock
+                Text="Apicase API Token:"
+                VerticalAlignment="Center"
+                Width="120" />
+            <TextBox
+                Text="{Binding ApicaseApiToken}"
+                VerticalAlignment="Center"
+                Width="200"
+                Watermark="Leave empty for free token (vcru)" />
+        </StackPanel>
+
+        <TextBlock
+            FontSize="10"
+            Foreground="Gray"
+            Text="Free token 'vcru' is used by default. Enter your own token for premium features."
+            TextWrapping="Wrap" />
+
         <Button
             Click="OnCloseClick"
             Content="Close"

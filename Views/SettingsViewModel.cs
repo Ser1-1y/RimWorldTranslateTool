@@ -8,6 +8,7 @@ public class SettingsViewModel : INotifyPropertyChanged
 {
     private string? _selectedLanguage;
     private bool _autoSave;
+    private string? _apicaseApiToken;
 
     public ObservableCollection<string> Languages { get; } = ["English", "French", "German", "Spanish", "Russian"];
 
@@ -32,6 +33,18 @@ public class SettingsViewModel : INotifyPropertyChanged
             if (_autoSave == value) 
                 return;
             _autoSave = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string? ApicaseApiToken
+    {
+        get => _apicaseApiToken;
+        set
+        {
+            if (_apicaseApiToken == value) 
+                return;
+            _apicaseApiToken = value;
             OnPropertyChanged();
         }
     }

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -9,6 +11,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using RimWorldModTranslate.Models;
+using RimWorldModTranslate.Services;
 
 namespace RimWorldModTranslate.Views
 {
@@ -23,6 +26,8 @@ namespace RimWorldModTranslate.Views
         private TreeView? _translationTree;
         private Button? _saveButton;
         private Button? _saveAllButton;
+        private Button? _translateAllButton;
+        private Button? _translateFileButton;
         private TextBlock? _loadedFolderTextBlock;
         private TextBlock? _statusText;
         private TranslationNode? _activeEditNode;
@@ -48,6 +53,8 @@ namespace RimWorldModTranslate.Views
             _statusText = this.FindControl<TextBlock>("StatusText");
             _saveButton = this.FindControl<Button>("SaveButton");
             _saveAllButton = this.FindControl<Button>("SaveAllButton");
+            _translateAllButton = this.FindControl<Button>("TranslateAllButton");
+            _translateFileButton = this.FindControl<Button>("TranslateFileButton");
             _fileList = this.FindControl<ListBox>("FileList");
             _loadedFolderTextBlock = this.FindControl<TextBlock>("LoadedFolderTextBlock");
             _translationTree = this.FindControl<TreeView>("TranslationTree");
@@ -62,6 +69,9 @@ namespace RimWorldModTranslate.Views
                 DataContext = _settingsViewModel 
             };
             await settingsWindow.ShowDialog(this);
+            
+            // Refresh UI state after settings change
+            UpdateUiState();
         }
         
         #region Folder Loading and Parsing
@@ -367,6 +377,10 @@ namespace RimWorldModTranslate.Views
                     _activeEditNode = null; 
                     e.Handled = true;
                     break;
+                case Key.T when e.KeyModifiers == KeyModifiers.Control:
+                    OnTranslateKeyHotkey();
+                    e.Handled = true;
+                    break;
             }
         }
         
@@ -643,6 +657,8 @@ namespace RimWorldModTranslate.Views
             var hasFiles = _files.Any();
             _saveButton!.IsEnabled = _currentFile != null;
             _saveAllButton!.IsEnabled = hasFiles;
+            _translateAllButton!.IsEnabled = hasFiles;
+            _translateFileButton!.IsEnabled = _currentFile != null;
             UpdateStatus();
         }
 
@@ -693,6 +709,184 @@ namespace RimWorldModTranslate.Views
             public XDocument? Doc { get; init; }
             public List<TranslationNode> RootNodes { get; init; } = new();
             public string? LoadError { get; init; }
+        }
+
+        #endregion
+
+        #region Translation Methods
+
+        private async void OnTranslateKeyHotkey()
+        {
+            if (_activeEditNode == null || string.IsNullOrWhiteSpace(_activeEditNode.OriginalText))
+                return;
+
+            await TranslateSingleNode(_activeEditNode);
+        }
+
+        private async void OnTranslateSingleKeyClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is Button { DataContext: TranslationNode node })
+            {
+                await TranslateSingleNode(node);
+            }
+        }
+
+        private async void OnTranslateFileClick(object? sender, RoutedEventArgs e)
+        {
+            if (_currentFile == null || _flatNodeList.Count == 0)
+                return;
+
+            var untranslatedNodes = _flatNodeList.Where(n => string.IsNullOrWhiteSpace(n.SubmittedTranslation)).ToList();
+            if (untranslatedNodes.Count == 0)
+            {
+                await ShowError("All keys in the current file are already translated.");
+                return;
+            }
+
+            await TranslateNodesWithProgress(untranslatedNodes, "Current File");
+        }
+
+        private async void OnTranslateAllClick(object? sender, RoutedEventArgs e)
+        {
+            if (_files.Count == 0)
+                return;
+
+            var allUntranslatedNodes = new List<TranslationNode>();
+            foreach (var file in _files.Values)
+            {
+                if (file.RootNodes != null)
+                {
+                    allUntranslatedNodes.AddRange(GetUntranslatedNodes(file.RootNodes));
+                }
+            }
+
+            if (allUntranslatedNodes.Count == 0)
+            {
+                await ShowError("All keys are already translated.");
+                return;
+            }
+
+            await TranslateNodesWithProgress(allUntranslatedNodes, "All Files");
+        }
+
+        private async Task TranslateSingleNode(TranslationNode node)
+        {
+            node.IsTranslating = true;
+            try
+            {
+                var fromLanguage = TranslationService.GetLanguageCode("English");
+                var toLanguage = TranslationService.GetLanguageCode(_settingsViewModel.SelectedLanguage ?? "Russian");
+                
+                var translatedText = await TranslationService.TranslateTextAsync(
+                    node.OriginalText, 
+                    _settingsViewModel.ApicaseApiToken,
+                    fromLanguage,
+                    toLanguage);
+                    
+                if (!string.IsNullOrWhiteSpace(translatedText))
+                {
+                    node.Translation = translatedText;
+                    node.SubmittedTranslation = translatedText;
+                    node.IsEditing = false;
+                    UpdateStatus();
+                }
+                else
+                {
+                    await ShowError($"Failed to translate: {node.OriginalText}");
+                }
+            }
+            catch (TranslationException ex)
+            {
+                var errorMessage = ex.Message.Contains("host is unknown") || ex.Message.Contains("неизвестен")
+                    ? "Translation service is currently unavailable. Please check your internet connection and try again later."
+                    : $"Translation error: {ex.Message}";
+                await ShowError(errorMessage);
+            }
+            finally
+            {
+                node.IsTranslating = false;
+            }
+        }
+
+        private async Task TranslateNodesWithProgress(List<TranslationNode> nodes, string operationName)
+        {
+            var progressWindow = new ProgressWindow
+            {
+                CancellationTokenSource = new CancellationTokenSource()
+            };
+
+            // Show as modal dialog
+            var progressTask = progressWindow.ShowDialog(this);
+            
+            var successCount = 0;
+            var errorCount = 0;
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                if (progressWindow.CancellationTokenSource.Token.IsCancellationRequested)
+                    break;
+
+                var node = nodes[i];
+                progressWindow.UpdateProgress(i + 1, nodes.Count, $"{node.ElementName}: {node.OriginalText}");
+
+                node.IsTranslating = true;
+                try
+                {
+                    var fromLanguage = TranslationService.GetLanguageCode("English");
+                    var toLanguage = TranslationService.GetLanguageCode(_settingsViewModel.SelectedLanguage ?? "Russian");
+                    
+                    var translatedText = await TranslationService.TranslateTextAsync(
+                        node.OriginalText, 
+                        _settingsViewModel.ApicaseApiToken,
+                        fromLanguage,
+                        toLanguage);
+                        
+                    if (!string.IsNullOrWhiteSpace(translatedText))
+                    {
+                        node.Translation = translatedText;
+                        node.SubmittedTranslation = translatedText;
+                        successCount++;
+                    }
+                    else
+                    {
+                        errorCount++;
+                    }
+                }
+                catch (TranslationException)
+                {
+                    errorCount++;
+                }
+                finally
+                {
+                    node.IsTranslating = false;
+                }
+
+                // Small delay to prevent overwhelming the API
+                await Task.Delay(100, progressWindow.CancellationTokenSource.Token);
+            }
+
+            progressWindow.SetCompleted(successCount, errorCount);
+            UpdateStatus();
+            
+            // Wait for user to close the progress window
+            await progressTask;
+        }
+
+        private static List<TranslationNode> GetUntranslatedNodes(IEnumerable<TranslationNode> nodes)
+        {
+            var result = new List<TranslationNode>();
+            foreach (var node in nodes)
+            {
+                if (node.Children.Any())
+                {
+                    result.AddRange(GetUntranslatedNodes(node.Children));
+                }
+                else if (string.IsNullOrWhiteSpace(node.SubmittedTranslation))
+                {
+                    result.Add(node);
+                }
+            }
+            return result;
         }
 
         #endregion

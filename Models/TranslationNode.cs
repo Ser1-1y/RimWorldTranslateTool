@@ -11,6 +11,7 @@ public class TranslationNode : INotifyPropertyChanged
     private string? _translation;
     private bool _isEditing;
     private string? _submittedTranslation;
+    private bool _isTranslating;
 
     public string ElementName { get; init; } = "";
     public string OriginalText { get; init; } = "";
@@ -54,12 +55,26 @@ public class TranslationNode : INotifyPropertyChanged
         }
     }
 
+    public bool IsTranslating
+    {
+        get => _isTranslating;
+        set
+        {
+            if (_isTranslating == value) return;
+            _isTranslating = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DisplayText));
+        }
+    }
+
     public string DisplayText =>
-        IsEditing
-            ? $"{ElementName}: {OriginalText} →"
-            : !string.IsNullOrWhiteSpace(SubmittedTranslation)
-                ? $"{ElementName}: {OriginalText} → {SubmittedTranslation}"
-                : $"{ElementName}: {OriginalText}";
+        IsTranslating
+            ? $"{ElementName}: {OriginalText} → Translating..."
+            : IsEditing
+                ? $"{ElementName}: {OriginalText} →"
+                : !string.IsNullOrWhiteSpace(SubmittedTranslation)
+                    ? $"{ElementName}: {OriginalText} → {SubmittedTranslation}"
+                    : $"{ElementName}: {OriginalText}";
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? name = null)
