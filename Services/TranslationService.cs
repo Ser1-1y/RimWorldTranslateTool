@@ -14,7 +14,9 @@ namespace RimWorldModTranslate.Services
         public static async Task<string?> TranslateTextAsync(string text, string? apiToken = null, string? fromLanguage = null, string? toLanguage = null)
         {
             if (string.IsNullOrWhiteSpace(text))
+            {
                 return null;
+            }
 
             // Check internet connectivity first
             if (!await IsInternetAvailable())
@@ -44,9 +46,13 @@ namespace RimWorldModTranslate.Services
                     
                     // Add language parameters if provided
                     if (!string.IsNullOrWhiteSpace(fromLanguage))
+                    {
                         url += $"&from={fromLanguage}";
+                    }
                     if (!string.IsNullOrWhiteSpace(toLanguage))
+                    {
                         url += $"&to={toLanguage}";
+                    }
 
                     var response = await Http.GetAsync(url);
                     response.EnsureSuccessStatusCode();

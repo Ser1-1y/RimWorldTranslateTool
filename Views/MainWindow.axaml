@@ -34,6 +34,11 @@
                     Click="OnTranslateFileClick"
                     Content="Translate Current File"
                     x:Name="TranslateFileButton" />
+                <Button
+                    Click="OnTranslateKeyHotkey"
+                    Content="🌐 Translate"
+                    x:Name="TranslateButton"
+                    ToolTip.Tip="Translate selected key" />
             </StackPanel>
 
             <TextBlock
