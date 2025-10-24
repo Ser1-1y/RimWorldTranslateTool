@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -9,6 +11,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using RimWorldModTranslate.Models;
+using RimWorldModTranslate.Services;
 
 namespace RimWorldModTranslate.Views
 {
@@ -23,6 +26,9 @@ namespace RimWorldModTranslate.Views
         private TreeView? _translationTree;
         private Button? _saveButton;
         private Button? _saveAllButton;
+        private Button? _translateAllButton;
+        private Button? _translateFileButton;
+        private Button? _translateButton;
         private TextBlock? _loadedFolderTextBlock;
         private TextBlock? _statusText;
         private TranslationNode? _activeEditNode;
@@ -48,6 +54,9 @@ namespace RimWorldModTranslate.Views
             _statusText = this.FindControl<TextBlock>("StatusText");
             _saveButton = this.FindControl<Button>("SaveButton");
             _saveAllButton = this.FindControl<Button>("SaveAllButton");
+            _translateAllButton = this.FindControl<Button>("TranslateAllButton");
+            _translateFileButton = this.FindControl<Button>("TranslateFileButton");
+            _translateButton = this.FindControl<Button>("TranslateButton");
             _fileList = this.FindControl<ListBox>("FileList");
             _loadedFolderTextBlock = this.FindControl<TextBlock>("LoadedFolderTextBlock");
             _translationTree = this.FindControl<TreeView>("TranslationTree");
@@ -62,6 +71,9 @@ namespace RimWorldModTranslate.Views
                 DataContext = _settingsViewModel 
             };
             await settingsWindow.ShowDialog(this);
+            
+            // Refresh UI state after settings change
+            UpdateUiState();
         }
         
         #region Folder Loading and Parsing
@@ -75,7 +87,9 @@ namespace RimWorldModTranslate.Views
 
             var folder = await dlg.ShowAsync(this);
             if (string.IsNullOrWhiteSpace(folder))
+            {
                 return;
+            }
 
             LoadFolder(folder);
         }
@@ -97,7 +111,10 @@ namespace RimWorldModTranslate.Views
                 {
                     var doc = XDocument.Load(file);
                     var root = doc.Root;
-                    if (root == null) continue;
+                    if (root == null)
+                    {
+                        continue;
+                    }
 
                     var grouped = GroupByDef(root, file, _nodeLookup);
                     if (grouped.Any())
@@ -322,8 +339,10 @@ namespace RimWorldModTranslate.Views
 
         private async void ApplyActiveEdit(TranslationNode node)
         {
-            if (!node.IsEditing) 
+            if (!node.IsEditing)
+            {
                 return;
+            }
     
             node.SubmittedTranslation = string.IsNullOrWhiteSpace(node.Translation) ? null : node.Translation?.Trim();
             node.IsEditing = false;
@@ -335,7 +354,9 @@ namespace RimWorldModTranslate.Views
             }
 
             if (_activeEditNode == node)
+            {
                 _activeEditNode = null;
+            }
     
             UpdateStatus();
         }
@@ -344,7 +365,9 @@ namespace RimWorldModTranslate.Views
         private void OnEditKeyDown(object? sender, KeyEventArgs e)
         {
             if (sender is not TextBox { DataContext: TranslationNode node })
+            {
                 return;
+            }
 
             // ReSharper disable once SwitchStatementMissingSomeEnumCasesNoDefault
             switch (e.Key)
@@ -367,20 +390,35 @@ namespace RimWorldModTranslate.Views
                     _activeEditNode = null; 
                     e.Handled = true;
                     break;
+                case Key.T when e.KeyModifiers == KeyModifiers.Control:
+                    OnTranslateKeyHotkey(sender, e);
+                    e.Handled = true;
+                    break;
             }
         }
         
         private void OnFileSelected(object? sender, SelectionChangedEventArgs e)
         {
-            if (_activeEditNode != null) 
+            if (_activeEditNode != null)
+            {
                 ApplyActiveEdit(_activeEditNode);
+            }
 
-            if (_fileList == null) return;
+            if (_fileList == null)
+            {
+                return;
+            }
             var sel = _fileList.SelectedIndex;
-            if (sel < 0) return;
+            if (sel < 0)
+            {
+                return;
+            }
 
             var ordered = _files.Values.OrderBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
-            if (sel >= ordered.Count) return;
+            if (sel >= ordered.Count)
+            {
+                return;
+            }
 
             var data = ordered[sel];
             DisplayFile(data);
@@ -421,7 +459,9 @@ namespace RimWorldModTranslate.Views
         private void OnEditTextBoxLoaded(object? sender, RoutedEventArgs e)
         {
             if (sender is not TextBox { DataContext: TranslationNode node } tb)
+            {
                 return;
+            }
 
             if (node.IsEditing && node == _activeEditNode)
             {
@@ -441,12 +481,12 @@ namespace RimWorldModTranslate.Views
         {
             if (_activeEditNode != null && _activeEditNode != node)
             {
-                ApplyActiveEdit(_activeEditNode); 
+                ApplyActiveEdit(_activeEditNode);
             }
             
-            node.Translation ??= node.SubmittedTranslation ?? ""; 
-            node.IsEditing = true; 
-            _activeEditNode = node; 
+            node.Translation ??= node.SubmittedTranslation ?? "";
+            node.IsEditing = true;
+            _activeEditNode = node;
         }
 
         #endregion
@@ -455,8 +495,10 @@ namespace RimWorldModTranslate.Views
 
         private async void OnSaveClick(object? sender, RoutedEventArgs e)
         {
-            if (_currentFile == null || _currentFile.Doc == null) 
+            if (_currentFile == null || _currentFile.Doc == null)
+            {
                 return;
+            }
 
             var dlg = new SaveFileDialog
             {
@@ -466,8 +508,10 @@ namespace RimWorldModTranslate.Views
             };
 
             var path = await dlg.ShowAsync(this);
-            if (string.IsNullOrWhiteSpace(path)) 
+            if (string.IsNullOrWhiteSpace(path))
+            {
                 return;
+            }
 
             try
             {
@@ -483,7 +527,10 @@ namespace RimWorldModTranslate.Views
 
         private async void OnSaveAllClick(object? sender, RoutedEventArgs e)
         {
-            if (_files.Count == 0 || _rootFolder == null) return;
+            if (_files.Count == 0 || _rootFolder == null)
+            {
+                return;
+            }
 
             var targetLanguage = _settingsViewModel.SelectedLanguage;
             if (string.IsNullOrWhiteSpace(targetLanguage))
@@ -529,7 +576,10 @@ namespace RimWorldModTranslate.Views
         {
             foreach (var data in _files.Values)
             {
-                if (data.Doc == null) continue;
+                if (data.Doc == null)
+                {
+                    continue;
+                }
 
                 try
                 {
@@ -577,7 +627,10 @@ namespace RimWorldModTranslate.Views
         private static void UpdateAboutXml(string translatedFolder, ICollection<string> errors, string targetLanguage)
         {
             var aboutPath = Path.Combine(translatedFolder, "About", "About.xml");
-            if (!File.Exists(aboutPath)) return;
+            if (!File.Exists(aboutPath))
+            {
+                return;
+            }
 
             try
             {
@@ -625,7 +678,7 @@ namespace RimWorldModTranslate.Views
         {
             foreach (var node in nodes)
             {
-                if (node.Children.Any()) 
+                if (node.Children.Any())
                 {
                     // This is a grouping node, recurse into its children
                     FlattenNodes(node.Children);
@@ -643,6 +696,9 @@ namespace RimWorldModTranslate.Views
             var hasFiles = _files.Any();
             _saveButton!.IsEnabled = _currentFile != null;
             _saveAllButton!.IsEnabled = hasFiles;
+            _translateAllButton!.IsEnabled = hasFiles && _settingsViewModel.EnableTranslation;
+            _translateFileButton!.IsEnabled = _currentFile != null && _settingsViewModel.EnableTranslation;
+            _translateButton!.IsEnabled = _activeEditNode != null && _settingsViewModel.EnableTranslation;
             UpdateStatus();
         }
 
@@ -693,6 +749,216 @@ namespace RimWorldModTranslate.Views
             public XDocument? Doc { get; init; }
             public List<TranslationNode> RootNodes { get; init; } = new();
             public string? LoadError { get; init; }
+        }
+
+        #endregion
+
+        #region Translation Methods
+
+        private async void OnTranslateKeyHotkey(object? sender, RoutedEventArgs e)
+        {
+            if (_activeEditNode == null || string.IsNullOrWhiteSpace(_activeEditNode.OriginalText))
+            {
+                return;
+            }
+
+            await TranslateSingleNode(_activeEditNode);
+        }
+
+        private async void OnTranslateSingleKeyClick(object? sender, RoutedEventArgs e)
+        {
+            if (sender is Button { DataContext: TranslationNode node })
+            {
+                await TranslateSingleNode(node);
+            }
+        }
+
+        private async void OnTranslateFileClick(object? sender, RoutedEventArgs e)
+        {
+            if (_currentFile == null || _flatNodeList.Count == 0)
+            {
+                return;
+            }
+
+            var untranslatedNodes = _flatNodeList.Where(n => string.IsNullOrWhiteSpace(n.SubmittedTranslation)).ToList();
+            if (untranslatedNodes.Count == 0)
+            {
+                await ShowError("All keys in the current file are already translated.");
+                return;
+            }
+
+            await TranslateNodesWithProgress(untranslatedNodes, "Current File");
+        }
+
+        private async void OnTranslateAllClick(object? sender, RoutedEventArgs e)
+        {
+            if (_files.Count == 0)
+            {
+                return;
+            }
+
+            var allUntranslatedNodes = new List<TranslationNode>();
+            foreach (var file in _files.Values)
+            {
+                if (file.RootNodes != null)
+                {
+                    allUntranslatedNodes.AddRange(GetUntranslatedNodes(file.RootNodes));
+                }
+            }
+
+            if (allUntranslatedNodes.Count == 0)
+            {
+                await ShowError("All keys are already translated.");
+                return;
+            }
+
+            await TranslateNodesWithProgress(allUntranslatedNodes, "All Files");
+        }
+
+        private async Task TranslateSingleNode(TranslationNode node)
+        {
+            node.IsTranslating = true;
+            try
+            {
+                var fromLanguage = UnifiedTranslationService.GetLanguageCode("English");
+                var toLanguage = UnifiedTranslationService.GetLanguageCode(_settingsViewModel.SelectedLanguage ?? "Russian");
+                
+                var request = new TranslationRequest
+                {
+                    Text = node.OriginalText,
+                    FromLanguage = fromLanguage,
+                    ToLanguage = toLanguage,
+                    Provider = _settingsViewModel.SelectedProvider,
+                    ApiKey = GetApiKeyForProvider(_settingsViewModel.SelectedProvider)
+                };
+                
+                var response = await UnifiedTranslationService.TranslateAsync(request);
+                    
+                if (response.Success && !string.IsNullOrWhiteSpace(response.TranslatedText))
+                {
+                    node.Translation = response.TranslatedText;
+                    node.SubmittedTranslation = response.TranslatedText;
+                    node.IsEditing = false;
+                    UpdateStatus();
+                }
+                else
+                {
+                    await ShowError($"Failed to translate: {node.OriginalText}\nError: {response.ErrorMessage}");
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = ex.Message.Contains("host is unknown") || ex.Message.Contains("неизвестен")
+                    ? "Translation service is currently unavailable. Please check your internet connection and try again later."
+                    : $"Translation error: {ex.Message}";
+                await ShowError(errorMessage);
+            }
+            finally
+            {
+                node.IsTranslating = false;
+            }
+        }
+
+        private async Task TranslateNodesWithProgress(List<TranslationNode> nodes, string operationName)
+        {
+            var progressWindow = new ProgressWindow
+            {
+                CancellationTokenSource = new CancellationTokenSource()
+            };
+
+            // Show as modal dialog
+            var progressTask = progressWindow.ShowDialog(this);
+            
+            var successCount = 0;
+            var errorCount = 0;
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                if (progressWindow.CancellationTokenSource.Token.IsCancellationRequested)
+                    break;
+
+                var node = nodes[i];
+                progressWindow.UpdateProgress(i + 1, nodes.Count, $"{node.ElementName}: {node.OriginalText}");
+
+                node.IsTranslating = true;
+                try
+                {
+                    var fromLanguage = UnifiedTranslationService.GetLanguageCode("English");
+                    var toLanguage = UnifiedTranslationService.GetLanguageCode(_settingsViewModel.SelectedLanguage ?? "Russian");
+                    
+                    var request = new TranslationRequest
+                    {
+                        Text = node.OriginalText,
+                        FromLanguage = fromLanguage,
+                        ToLanguage = toLanguage,
+                        Provider = _settingsViewModel.SelectedProvider,
+                        ApiKey = GetApiKeyForProvider(_settingsViewModel.SelectedProvider)
+                    };
+                    
+                    var response = await UnifiedTranslationService.TranslateAsync(request);
+                        
+                    if (response.Success && !string.IsNullOrWhiteSpace(response.TranslatedText))
+                    {
+                        node.Translation = response.TranslatedText;
+                        node.SubmittedTranslation = response.TranslatedText;
+                        successCount++;
+                    }
+                    else
+                    {
+                        errorCount++;
+                    }
+                }
+                catch (Exception)
+                {
+                    errorCount++;
+                }
+                finally
+                {
+                    node.IsTranslating = false;
+                }
+
+                // Small delay to prevent overwhelming the API
+                await Task.Delay(100, progressWindow.CancellationTokenSource.Token);
+            }
+
+            progressWindow.SetCompleted(successCount, errorCount);
+            UpdateStatus();
+            
+            // Wait for user to close the progress window
+            await progressTask;
+        }
+
+        private static List<TranslationNode> GetUntranslatedNodes(IEnumerable<TranslationNode> nodes)
+        {
+            var result = new List<TranslationNode>();
+            foreach (var node in nodes)
+            {
+                if (node.Children.Any())
+                {
+                    result.AddRange(GetUntranslatedNodes(node.Children));
+                }
+                else if (string.IsNullOrWhiteSpace(node.SubmittedTranslation))
+                {
+                    result.Add(node);
+                }
+            }
+            return result;
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        private string? GetApiKeyForProvider(TranslationProvider provider)
+        {
+            return provider switch
+            {
+                TranslationProvider.Apicase => _settingsViewModel.ApicaseApiToken,
+                TranslationProvider.GoogleTranslate => _settingsViewModel.GoogleApiKey,
+                TranslationProvider.DeepL => _settingsViewModel.DeeplApiKey,
+                TranslationProvider.Yandex => _settingsViewModel.YandexApiKey,
+                _ => null
+            };
         }
 
         #endregion

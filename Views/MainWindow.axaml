@@ -26,6 +26,19 @@
                     Click="OnSaveAllClick"
                     Content="Save All Files"
                     x:Name="SaveAllButton" />
+                <Button
+                    Click="OnTranslateAllClick"
+                    Content="Translate All Files"
+                    x:Name="TranslateAllButton" />
+                <Button
+                    Click="OnTranslateFileClick"
+                    Content="Translate Current File"
+                    x:Name="TranslateFileButton" />
+                <Button
+                    Click="OnTranslateKeyHotkey"
+                    Content="🌐 Translate"
+                    x:Name="TranslateButton"
+                    ToolTip.Tip="Translate selected key" />
             </StackPanel>
 
             <TextBlock
@@ -119,6 +132,13 @@
                                         ToolTip.Tip="{Binding GrammarSummary}"
                                         VerticalAlignment="Center"
                                         Watermark="Enter translation..." />
+
+                                    <Button
+                                        Click="OnTranslateSingleKeyClick"
+                                        Content="🌐"
+                                        IsVisible="{Binding IsEditing}"
+                                        ToolTip.Tip="Translate this key (Ctrl+T)"
+                                        VerticalAlignment="Center" />
 
                                     <StackPanel
                                         IsVisible="{Binding HasGrammarIssues}"
